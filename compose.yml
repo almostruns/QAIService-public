@@ -1,0 +1,156 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${QAI_RABBITMQ_USER:-qaiservice}
+      RABBITMQ_DEFAULT_PASS: ${QAI_RABBITMQ_PASSWORD:?QAI_RABBITMQ_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "127.0.0.1:${QAI_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    restart: unless-stopped
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${QAI_DB_NAME:-qaiservice}
+      MYSQL_USER: ${QAI_DB_USER:-qaiservice}
+      MYSQL_PASSWORD: ${QAI_DB_PASSWORD:?QAI_DB_PASSWORD must be set}
+      MYSQL_ROOT_PASSWORD: ${QAI_DB_ROOT_PASSWORD:?QAI_DB_ROOT_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  migrate:
+    image: mysql:8.4
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${QAI_DB_PASSWORD:?QAI_DB_PASSWORD must be set}
+      QAI_DB_NAME: ${QAI_DB_NAME:-qaiservice}
+      QAI_DB_USER: ${QAI_DB_USER:-qaiservice}
+    volumes:
+      - ./db/migrations:/migrations:ro
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/001_create_users.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/002_create_chat_messages.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/003_create_knowledge_documents.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/004_create_life_records.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/005_add_chat_mode.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/006_create_chat_conversations.sql
+        && mysql --host=mysql --user="$${QAI_DB_USER}" --database="$${QAI_DB_NAME}" < /migrations/007_create_sessions.sql
+
+  dev:
+    build:
+      context: .
+      dockerfile: docker/dev/Dockerfile
+      target: dev
+    image: qaiservice-dev:v1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      QAI_DB_HOST: mysql
+      QAI_DB_PORT: "3306"
+      QAI_DB_NAME: ${QAI_DB_NAME:-qaiservice}
+      QAI_DB_USER: ${QAI_DB_USER:-qaiservice}
+      QAI_DB_PASSWORD: ${QAI_DB_PASSWORD:?QAI_DB_PASSWORD must be set}
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+
+  retrieval:
+    profiles: ["rag"]
+    build:
+      context: .
+      dockerfile: retrieval_service/Dockerfile
+    image: qaiservice-retrieval:v1
+    environment:
+      QAI_RERANK_MODEL: ${QAI_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+    ports:
+      - "127.0.0.1:${QAI_RERANK_PORT:-8090}:8090"
+    restart: unless-stopped
+    volumes:
+      - qaiservice-models:/models
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/dev/Dockerfile
+      target: server
+    image: qaiservice:v1
+    depends_on:
+      mysql:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      QAI_DB_HOST: mysql
+      QAI_DB_PORT: "3306"
+      QAI_DB_NAME: ${QAI_DB_NAME:-qaiservice}
+      QAI_DB_USER: ${QAI_DB_USER:-qaiservice}
+      QAI_DB_PASSWORD: ${QAI_DB_PASSWORD:?QAI_DB_PASSWORD must be set}
+      QAI_CHAT_PROVIDER: ${QAI_CHAT_PROVIDER:-mock}
+      QAI_MODEL_BASE_URL: ${QAI_MODEL_BASE_URL:-}
+      QAI_MODEL_NAME: ${QAI_MODEL_NAME:-}
+      QAI_MODEL_API_KEY: ${QAI_MODEL_API_KEY:-}
+      QAI_MODEL_TIMEOUT_MS: ${QAI_MODEL_TIMEOUT_MS:-30000}
+      QAI_WEB_SEARCH_ENABLED: ${QAI_WEB_SEARCH_ENABLED:-false}
+      QAI_WEB_SEARCH_PROVIDER: ${QAI_WEB_SEARCH_PROVIDER:-baidu}
+      QAI_BAIDU_SEARCH_API_KEY: ${QAI_BAIDU_SEARCH_API_KEY:-}
+      QAI_WEB_SEARCH_CONNECT_TIMEOUT_MS: ${QAI_WEB_SEARCH_CONNECT_TIMEOUT_MS:-1000}
+      QAI_WEB_SEARCH_TIMEOUT_MS: ${QAI_WEB_SEARCH_TIMEOUT_MS:-5000}
+      QAI_WEB_SEARCH_TOP_K: ${QAI_WEB_SEARCH_TOP_K:-10}
+      QAI_RERANK_ENABLED: ${QAI_RERANK_ENABLED:-false}
+      QAI_RERANK_URL: ${QAI_RERANK_URL:-http://retrieval:8090/rerank}
+      QAI_RERANK_TIMEOUT_MS: ${QAI_RERANK_TIMEOUT_MS:-5000}
+      QAI_TOKEN_ENABLED: ${QAI_TOKEN_ENABLED:-false}
+      QAI_TOKEN_BASE_URL: ${QAI_TOKEN_BASE_URL:-http://retrieval:8090}
+      QAI_TOKEN_TIMEOUT_MS: ${QAI_TOKEN_TIMEOUT_MS:-5000}
+      QAI_COOKIE_SECURE: ${QAI_COOKIE_SECURE:-false}
+      QAI_REGISTRATION_ENABLED: ${QAI_REGISTRATION_ENABLED:-true}
+      QAI_FILE_STORAGE_ROOT: ${QAI_FILE_STORAGE_ROOT:-/var/lib/qaiservice/files}
+      QAI_LOG_PATH: ${QAI_LOG_PATH:-/var/log/qaiservice/qaiservice.log}
+      QAI_WEB_ROOT: /opt/qaiservice/web
+      QAI_RABBITMQ_HOST: rabbitmq
+      QAI_RABBITMQ_PORT: "5672"
+      QAI_RABBITMQ_USER: ${QAI_RABBITMQ_USER:-qaiservice}
+      QAI_RABBITMQ_PASSWORD: ${QAI_RABBITMQ_PASSWORD:?QAI_RABBITMQ_PASSWORD must be set}
+      QAI_RABBITMQ_VHOST: ${QAI_RABBITMQ_VHOST:-/}
+      QAI_RABBITMQ_QUEUE: ${QAI_RABBITMQ_QUEUE:-qaiservice.chat-messages}
+    ports:
+      - "0.0.0.0:${QAI_HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+    volumes:
+      - qaiservice-files:/var/lib/qaiservice/files
+      - ./logs:/var/log/qaiservice
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  qaiservice-files:
+  qaiservice-models:

@@ -1,0 +1,32 @@
+.auth-page { position: relative; overflow-x: hidden; background: var(--paper); }
+.auth-page::before { position: fixed; inset: 0 auto 0 0; width: 50%; background: var(--green-dark); content: ""; }
+.auth-shell { position: relative; z-index: 1; width: min(calc(100% - 64px), 1180px); min-height: 100vh; margin: auto; display: grid; grid-template-columns: minmax(0, 1fr) 440px; align-items: center; gap: 96px; padding: 48px 0; }
+.auth-intro { align-self: stretch; display: flex; flex-direction: column; color: #f7f8f5; padding: 8px 0; }
+.auth-intro > div { max-width: 500px; margin-block: auto; padding-bottom: 72px; }
+.auth-intro h1 { margin: 12px 0 18px; font-size: clamp(42px, 4.4vw, 64px); line-height: 1.08; }
+.auth-intro p:not(.eyebrow) { color: #d6dfda; font-size: 17px; line-height: 1.75; }
+.auth-card { width: 100%; justify-self: end; padding: 40px; }
+.auth-card h2 { margin: 8px 0; font-size: 32px; }
+.auth-switch { margin: 24px 0 0; color: var(--muted); }
+.auth-switch a { color: var(--green); font-weight: 700; }
+.account-shell { padding: 80px 0; }
+.account-shell h1 { margin: 10px 0; font-size: clamp(38px, 5vw, 60px); }
+.portal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 46px; }
+.portal { display: block; padding: 30px; text-decoration: none; transition: transform 160ms ease; }
+.portal:hover { transform: translateY(-3px); }
+.portal > span, .portal p { color: var(--muted); }
+.portal > strong { color: var(--green); }
+@media (max-width: 1024px) {
+  .auth-shell { width: min(calc(100% - 48px), 976px); grid-template-columns: minmax(0, 1fr) 400px; gap: 48px; }
+  .auth-intro > div { max-width: 450px; }
+}
+@media (max-width: 900px) {
+  .auth-page::before { display: none; }
+  .auth-shell { width: min(calc(100% - 28px), 520px); grid-template-columns: 1fr; gap: 22px; padding: 24px 0 40px; }
+  .auth-intro { min-height: auto; padding: 0; color: var(--ink); }
+  .auth-intro > div { display: none; }
+  .brand-light { color: var(--ink); }
+  .auth-card { padding: 26px 20px; }
+  .portal-grid { grid-template-columns: 1fr; }
+  .account-shell { padding: 44px 0; }
+}

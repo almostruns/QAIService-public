@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>栖居 · 私人管家</title>
+  <link rel="stylesheet" href="/assets/css/tokens.css"><link rel="stylesheet" href="/assets/css/base.css"><link rel="stylesheet" href="/assets/css/components.css"><link rel="stylesheet" href="/assets/css/assistant.css"><link rel="stylesheet" href="/assets/css/focus_timer.css">
+</head>
+<body class="assistant-page">
+  <aside class="rail"><a class="brand brand-light" href="/app"><span>栖</span><strong>栖居</strong></a><nav id="nav"><button class="active" data-view="home">总览</button><button data-view="knowledge">知识库</button><button data-view="schedule">日程</button><button data-view="ledger">记账</button><button data-view="health">体重睡眠</button></nav><a class="chat-link workspace-switch" href="/chat">AI 对话</a></aside>
+  <main class="assistant-main">
+    <header class="topbar"><div><p class="eyebrow">LOCAL-FIRST ASSISTANT</p><h1 id="view-title">今天，先把重要的事理清楚。</h1></div><div class="status-pill"><i></i><span>私人模式</span><button id="logout" class="button-link">退出</button></div></header>
+    <section class="view active" id="home-view">
+      <div class="hero card"><div><p class="eyebrow">私人数据，由你掌握</p><h2>知识变成行动，记录沉淀成答案。</h2><p>上传资料、追踪生活，通过一个可信的本地入口整理自己的信息。</p></div><button data-jump="knowledge">打开知识库</button></div>
+      <div class="metric-grid"><article class="card metric"><span>知识文档</span><strong id="document-count">—</strong><small>本地保存</small></article><article class="card metric"><span>待复习</span><strong id="review-count">—</strong><small>形成下一步行动</small></article><article class="card metric"><span>今日专注</span><strong id="focus-today">0m</strong><small>由服务端计时</small></article></div>
+      <section class="card assistant-card"><div><p class="eyebrow">问你的资料</p><h2>证据优先，不凭空猜测</h2></div><form id="ask-form"><input id="ask-query" placeholder="例如：我的 C++ 网络笔记讲了什么？" required><button>提问</button></form><div id="answer" class="answer empty">回答会显示在这里，并附带原始文件证据。</div></section>
+      <section class="card assistant-card"><div><p class="eyebrow">自然语言记一笔</p><h2>先预览，再确认写入</h2></div><form id="command-form"><input id="command-text" placeholder="例如：记录支出 25.50 元 餐饮" required><button>解析</button></form><div id="command-result" class="answer empty">支持体重、收支、专注和习惯打卡的明确指令。</div></section>
+    </section>
+    <section class="view" id="knowledge-view"><div class="section-head"><div><p class="eyebrow">KNOWLEDGE LIBRARY</p><h2>我的知识与文件</h2></div><label class="upload-button">上传文档<input id="file-input" type="file" accept=".txt,.md,.pdf,.docx" hidden></label></div><div id="upload-state" class="notice" hidden></div><div class="filter-row"><button class="active" data-filter="all">全部</button><button data-filter="learning">学习中</button><button data-filter="mastered">已掌握</button><button data-filter="needs_review">待复习</button></div><div id="documents" class="file-grid"><div class="empty card">还没有文件，先上传一份 TXT、Markdown、PDF 或 DOCX。</div></div></section>
+    <section class="view" id="schedule-view">
+      <div class="section-head"><div><p class="eyebrow">SCHEDULE & FOCUS</p><h2>日程、专注与打卡</h2></div><div class="action-row"><button data-action="review-plan">安排待复习</button><button data-action="new-task">新建待办</button><button data-action="new-event">新建事项</button></div></div>
+      <div class="project-regions">
+        <section class="card project-region"><div class="project-shelf-head"><div><p class="eyebrow">FOCUS</p><h3>专注项目</h3></div><button data-action="new-focus-project">添加</button></div><div id="focus-projects" class="project-strip"><p class="empty">正在加载…</p></div></section>
+        <section class="card project-region"><div class="project-shelf-head"><div><p class="eyebrow">CHECK IN</p><h3>今日打卡</h3></div><button data-action="new-checkin-project">添加</button></div><div id="checkin-projects" class="project-strip"><p class="empty">正在加载…</p></div></section>
+      </div>
+      <div class="schedule-layout">
+        <section class="card schedule-calendar-card"><div class="calendar-toolbar"><button id="calendar-previous" type="button" aria-label="上个月">‹</button><h3 id="schedule-month">本月</h3><button id="calendar-next" type="button" aria-label="下个月">›</button></div><div class="calendar-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div id="schedule-calendar" class="activity-calendar"></div></section>
+        <section class="card schedule-detail-card"><div class="activity-card-head"><div><p class="eyebrow">SELECTED DAY</p><h3 id="schedule-date-title">今天</h3></div><strong id="activity-total">0 分钟</strong></div><div id="activity-chart" class="activity-chart"><div class="donut empty-donut" aria-label="当天暂无专注记录"></div><p class="empty">完成一段专注后显示时间占比。</p></div><div id="schedule-day-detail" class="day-detail">正在加载当天安排…</div></section>
+      </div>
+    </section>
+    <section class="view" id="ledger-view">
+      <div class="section-head"><div><p class="eyebrow">LEDGER</p><h2>预算、账户与支出结构</h2></div><div class="action-row"><button data-action="manage-budget">设置预算</button><button data-action="new-account">添加账户</button><button data-action="new-ledger">记一笔</button></div></div>
+      <div id="budget-overview" class="budget-overview"></div>
+      <div id="ledger-summary" class="asset-grid"></div>
+      <div class="ledger-grid"><section class="card analytics-card"><div class="module-heading"><div><p class="eyebrow">MONTHLY SPENDING</p><h3>本月支出分类</h3></div><strong id="daily-expense">—</strong></div><div id="expense-chart" class="expense-chart"></div></section><section class="card account-card"><div class="module-heading"><h3>资金账户</h3></div><div id="account-list"></div></section></div>
+      <section class="card list ledger-records"><h3>最近账目</h3><div id="ledger-list"></div></section>
+    </section>
+    <section class="view" id="health-view">
+      <div class="section-head"><div><p class="eyebrow">WELLBEING</p><h2>体重与睡眠趋势</h2></div><div class="action-row"><button data-action="record-weight">记录体重</button><button data-action="record-sleep">记录睡眠</button></div></div>
+      <section class="card trend-card"><div class="trend-head"><div><p class="eyebrow">SLEEP</p><h3>睡眠时长趋势</h3></div><div id="sleep-latest" class="latest-sleep"></div></div><div id="sleep-chart" class="line-chart"></div></section>
+      <section class="card trend-card"><div class="trend-head"><div><p class="eyebrow">WEIGHT</p><h3>体重趋势</h3></div><strong id="weight-latest">—</strong></div><div id="weight-chart" class="line-chart"></div></section>
+      <div class="split"><div id="weight-panel" class="card list"></div><div id="sleep-panel" class="card list"></div></div>
+    </section>
+  </main>
+  <dialog id="modal"><form method="dialog" id="modal-form"><button class="close" type="button" aria-label="关闭">×</button><div id="modal-content"></div></form></dialog>
+  <script type="module" src="/assets/js/assistant.js"></script>
+</body>
+</html>

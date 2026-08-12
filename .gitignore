@@ -1,0 +1,16 @@
+/build/
+/vcpkg_installed/
+/.devcontainer/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+logs/
+.superpowers/brainstorm/

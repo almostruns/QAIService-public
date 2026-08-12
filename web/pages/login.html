@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>登录 · 栖居</title>
+  <link rel="stylesheet" href="/assets/css/tokens.css"><link rel="stylesheet" href="/assets/css/base.css"><link rel="stylesheet" href="/assets/css/components.css"><link rel="stylesheet" href="/assets/css/auth.css">
+</head>
+<body class="auth-page" data-auth-mode="login">
+  <main class="auth-shell">
+    <section class="auth-intro"><a class="brand brand-light" href="/"><span>栖</span><strong>栖居</strong></a><div><p class="eyebrow">WELCOME BACK</p><h1>回到你的私人空间。</h1><p>继续整理知识、计划今天，或者和真实模型聊一聊。</p></div></section>
+    <section class="auth-card card"><p class="eyebrow">账户登录</p><h2>欢迎回来</h2><p class="muted">使用你在本服务创建的本地账户。</p>
+      <form id="login-form" class="form-stack">
+        <label>用户名<input name="username" autocomplete="username" minlength="3" maxlength="64" required></label>
+        <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label>
+        <button id="submit" type="submit">登录</button>
+      </form>
+      <p id="message" class="form-message" role="status" aria-live="polite"></p>
+      <p class="auth-switch">还没有账户？<a href="/register">现在注册</a></p>
+    </section>
+  </main>
+  <script type="module" src="/assets/js/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>注册 · 栖居</title>
+  <link rel="stylesheet" href="/assets/css/tokens.css"><link rel="stylesheet" href="/assets/css/base.css"><link rel="stylesheet" href="/assets/css/components.css"><link rel="stylesheet" href="/assets/css/auth.css">
+</head>
+<body class="auth-page" data-auth-mode="register">
+  <main class="auth-shell">
+    <section class="auth-intro"><a class="brand brand-light" href="/"><span>栖</span><strong>栖居</strong></a><div><p class="eyebrow">PRIVATE BY DEFAULT</p><h1>建立只属于你的信息入口。</h1><p>账户负责隔离文件、聊天和生活记录。初始化完成后可以关闭继续注册。</p></div></section>
+    <section class="auth-card card"><p class="eyebrow">创建账户</p><h2>开始使用栖居</h2>
+      <form id="register-form" class="form-stack">
+        <label>用户名<input name="username" autocomplete="username" pattern="[A-Za-z0-9_-]{3,64}" minlength="3" maxlength="64" required><small>3～64 位，只能使用字母、数字、下划线和短横线。</small></label>
+        <label>密码<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><small>长度为 8～128 位。</small></label>
+        <button id="submit" type="submit">创建账户</button>
+      </form>
+      <p id="message" class="form-message" role="status" aria-live="polite"></p>
+      <p class="auth-switch">已有账户？<a href="/login">返回登录</a></p>
+    </section>
+  </main>
+  <script type="module" src="/assets/js/auth.js"></script>
+</body>
+</html>

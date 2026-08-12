@@ -1,0 +1,10 @@
+.git
+build
+vcpkg_installed
+
+.env
+.env.*
+
+.DS_Store
+.vscode
+.idea

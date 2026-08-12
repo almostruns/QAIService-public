@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI 对话 · 栖居</title>
+  <link rel="stylesheet" href="/assets/css/tokens.css"><link rel="stylesheet" href="/assets/css/base.css"><link rel="stylesheet" href="/assets/css/components.css"><link rel="stylesheet" href="/assets/css/chat.css"><link rel="stylesheet" href="/assets/css/focus_timer.css">
+</head>
+<body class="chat-page">
+  <aside class="chat-rail">
+    <a class="brand brand-light" href="/app"><span>栖</span><strong>栖居</strong></a>
+    <div id="conversation-panel" class="conversation-panel" aria-label="对话记录">
+      <div class="conversation-heading"><div><p class="eyebrow">CONVERSATIONS</p><h2>对话记录</h2></div><button id="conversation-close" class="icon-button" type="button" aria-label="关闭对话记录">×</button></div>
+      <div id="desktop-mode-switch" class="desktop-mode-switch" role="group" aria-label="对话模式"><button class="active" type="button" data-chat-mode="private" aria-pressed="true">私人管家</button><button type="button" data-chat-mode="general" aria-pressed="false">普通对话</button></div>
+      <button id="new-conversation" class="new-conversation" type="button"><span>＋</span>新建对话</button>
+      <div id="conversation-list" class="conversation-list"></div>
+    </div>
+    <a class="workspace-switch" href="/app">返回管家</a>
+  </aside>
+  <main class="chat-main">
+    <header class="chat-header"><div><p class="eyebrow" id="mode-eyebrow">PRIVATE ASSISTANT</p><h1 id="mode-title">让资料和记录变成可执行的答案。</h1></div><span class="status-pill"><i></i>模型已配置</span></header>
+    <section id="history" class="chat-history" aria-label="聊天记录" aria-live="polite"><div class="chat-empty"><span>栖</span><h2>从一个具体问题开始。</h2><p>历史消息会在登录和服务重启后恢复。</p></div></section>
+    <p id="status" class="chat-status" role="status" aria-live="polite"></p>
+    <form id="chat" class="composer"><div class="mobile-mode-switch"><label for="mobile-mode-switch">对话模式</label><select id="mobile-mode-switch"><option value="private" selected>私人管家</option><option value="general">普通对话</option></select></div><div class="composer-input"><label class="sr-only" for="message">输入消息</label><textarea id="message" maxlength="4096" rows="2" placeholder="输入消息，Enter 发送，Shift + Enter 换行" required></textarea><div class="composer-toolbar"><label class="web-search-toggle" for="web-search-enabled"><input id="web-search-enabled" type="checkbox" role="switch"><span class="web-search-toggle-track" aria-hidden="true"><i></i></span><span>联网</span><small>按需判断</small></label></div></div><button id="send" type="submit">发送</button></form>
+  </main>
+  <button id="conversation-toggle" class="conversation-toggle" type="button" aria-controls="conversation-panel" aria-expanded="false">对话记录</button>
+  <dialog id="web-search-consent" class="web-consent-dialog" aria-labelledby="web-consent-title">
+    <form method="dialog">
+      <p class="eyebrow">PRIVACY CHECK</p><h2 id="web-consent-title">这次搜索可能包含私人信息</h2>
+      <p>下面内容将发送给百度搜索。允许一次不会保存授权，也不会自动允许下一次搜索。</p>
+      <div><strong>将发送的查询</strong><ul id="web-consent-queries"></ul></div>
+      <div><strong>检测到的风险</strong><ul id="web-consent-risks"></ul></div>
+      <div class="web-consent-actions"><button value="cancel" class="button-link">取消</button><button value="modify" class="button-link">修改内容</button><button value="allow">允许一次</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/assets/js/chat.js"></script>
+</body>
+</html>
