@@ -102,14 +102,16 @@ void registerRegistrationRoute(http::Router& router, db::DatabaseWorker& databas
         const CreateUserResult result = repository.create(credentials.username, password_hash);
 
         if (result.status == CreateUserStatus::kUsernameExists) {
+          QAI_LOG(info, qaiservice::log::Module::kUsers) << "user_registration_rejected reason=username_exists";
           writer.send(http::jsonResponse(409, {{"error", "username_exists"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kUsers) << "user_registered user_id=" << result.user->id;
         writer.send(http::jsonResponse(201, {{"user_id", result.user->id}, {"username", result.user->username}}));
       } catch (const db::DatabaseError&) {
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "users") << "user_register username=" << credentials.username << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kUsers) << "user_registration_failed error=" << error.what();
         writer.send(http::jsonResponse(500, {{"error", "internal_server_error"}}));
       }
     };
@@ -141,6 +143,7 @@ void registerLoginRoute(http::Router& router, db::DatabaseWorker& database_worke
             PasswordHasher hasher;
 
             if (!user.has_value() || !hasher.verify(user->password_hash, credentials.password)) {
+              QAI_LOG(info, qaiservice::log::Module::kUsers) << "user_login_rejected reason=invalid_credentials";
               writer.send(http::jsonResponse(401, {{"error", "invalid_credentials"}}));
               return;
             }
@@ -164,11 +167,12 @@ void registerLoginRoute(http::Router& router, db::DatabaseWorker& database_worke
 
             http::Response response = http::jsonResponse(200, {{"user_id", user->id}, {"username", user->username}});
             response.headers["Set-Cookie"] = sessionCookie(session.token, config.secure_cookie);
+            QAI_LOG(info, qaiservice::log::Module::kUsers) << "user_logged_in user_id=" << user->id;
             writer.send(std::move(response));
           } catch (const db::DatabaseError&) {
             writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
           } catch (const std::exception& error) {
-            QAI_LOG(err, "users") << "user_login username=" << credentials.username << " error=" << error.what();
+            QAI_LOG(err, qaiservice::log::Module::kUsers) << "user_login_failed error=" << error.what();
             writer.send(http::jsonResponse(500, {{"error", "internal_server_error"}}));
           }
         };
@@ -206,12 +210,13 @@ void registerSessionRoutes(http::Router& router, db::DatabaseWorker& database_wo
       try {
         SessionRepository repository(connection);
         repository.erase(token_hash);
+        QAI_LOG(info, qaiservice::log::Module::kUsers) << "user_logged_out";
         http::Response response{204, "application/json", ""};
         response.headers["Cache-Control"] = "no-store";
         response.headers["Set-Cookie"] = expiredSessionCookie();
         writer.send(std::move(response));
       } catch (const std::exception& error) {
-        QAI_LOG(warn, "users") << "session_logout_persist error=" << error.what();
+        QAI_LOG(warn, qaiservice::log::Module::kUsers) << "session_logout_persist error=" << error.what();
         http::Response response = http::jsonResponse(503, {{"error", "session_logout_unavailable"}});
         response.headers["Cache-Control"] = "no-store";
         response.headers["Set-Cookie"] = expiredSessionCookie();

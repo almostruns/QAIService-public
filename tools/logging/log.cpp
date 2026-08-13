@@ -27,6 +27,33 @@ class QaiDailyFilenameCalculator {
 
 }  // namespace
 
+std::string_view moduleName(Module module)
+{
+  switch (module) {
+    case Module::kMain:
+      return "main";
+    case Module::kHttp:
+      return "http";
+    case Module::kUsers:
+      return "users";
+    case Module::kChat:
+      return "chat";
+    case Module::kDb:
+      return "db";
+    case Module::kPersistence:
+      return "persistence";
+    case Module::kKnowledge:
+      return "knowledge";
+    case Module::kAssistant:
+      return "assistant";
+    case Module::kLife:
+      return "life";
+    case Module::kWebSearch:
+      return "web_search";
+  }
+  return "unknown";
+}
+
 std::filesystem::path logPathFromEnvironment()
 {
   const char* configured_path = std::getenv("QAI_LOG_PATH");

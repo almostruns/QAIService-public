@@ -1,5 +1,7 @@
 #include "persistence/chat_event_publisher.h"
 
+#include "logging/log.h"
+
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -51,15 +53,21 @@ ChatEventPublisher::~ChatEventPublisher()
 EnqueueStatus ChatEventPublisher::enqueue(std::vector<ChatMessageCreated> events)
 {
   if (events.empty()) {
+    QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "publisher_enqueue_rejected reason=empty_batch";
     return EnqueueStatus::kUnavailable;
   }
 
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
     if (state_->stopping) {
+      QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "publisher_enqueue_rejected reason=stopping";
       return EnqueueStatus::kUnavailable;
     }
     if (events.size() > state_->capacity - state_->pending) {
+      QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "publisher_enqueue_rejected reason=queue_full"
+                                                            << " event_count=" << events.size()
+                                                            << " pending=" << state_->pending
+                                                            << " capacity=" << state_->capacity;
       return EnqueueStatus::kBusy;
     }
     for (ChatMessageCreated& event : events) {
@@ -68,6 +76,7 @@ EnqueueStatus ChatEventPublisher::enqueue(std::vector<ChatMessageCreated> events
     }
   }
   state_->condition.notify_one();
+  QAI_LOG(info, qaiservice::log::Module::kPersistence) << "publisher_events_queued event_count=" << events.size();
   return EnqueueStatus::kQueued;
 }
 
@@ -109,7 +118,15 @@ void ChatEventPublisher::run()
     for (std::size_t attempt = 0; attempt < state_->max_attempts; ++attempt) {
       try {
         result = state_->transport->publish(event);
+      } catch (const std::exception& error) {
+        QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "publisher_attempt_failed event_id=" << event.event_id
+                                                              << " attempt=" << attempt + 1
+                                                              << " error=" << error.what();
+        result = TransportPublishResult::kRetryableFailure;
       } catch (...) {
+        QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "publisher_attempt_failed event_id=" << event.event_id
+                                                              << " attempt=" << attempt + 1
+                                                              << " error=unknown";
         result = TransportPublishResult::kRetryableFailure;
       }
       if (result != TransportPublishResult::kRetryableFailure) {
@@ -125,8 +142,16 @@ void ChatEventPublisher::run()
       --state_->pending;
       if (result == TransportPublishResult::kConfirmed) {
         ++state_->confirmed;
+        QAI_LOG(info, qaiservice::log::Module::kPersistence) << "publisher_event_confirmed event_id=" << event.event_id
+                                                              << " user_id=" << event.user_id
+                                                              << " conversation_id=" << event.conversation_id
+                                                              << " sequence=" << event.sequence;
       } else {
         ++state_->failed;
+        QAI_LOG(err, qaiservice::log::Module::kPersistence) << "publisher_event_failed event_id=" << event.event_id
+                                                             << " user_id=" << event.user_id
+                                                             << " conversation_id=" << event.conversation_id
+                                                             << " sequence=" << event.sequence;
       }
     }
   }

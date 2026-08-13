@@ -121,15 +121,15 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
     const persistence::EnqueueStatus status = chat_event_publisher_->enqueue(std::move(events));
     switch (status) {
       case persistence::EnqueueStatus::kQueued:
-        QAI_LOG(info, "http") << "chat_persistence_enqueue user_id=" << user_id << " first_sequence=" << first_sequence
+        QAI_LOG(info, qaiservice::log::Module::kPersistence) << "chat_events_enqueued user_id=" << user_id << " first_sequence=" << first_sequence
                  << " status=queued";
         return chat::ChatPersistenceStatus::kQueued;
       case persistence::EnqueueStatus::kBusy:
-        QAI_LOG(warn, "http") << "chat_persistence_enqueue user_id=" << user_id << " first_sequence=" << first_sequence
+        QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "chat_events_enqueue_failed user_id=" << user_id << " first_sequence=" << first_sequence
                  << " status=busy";
         return chat::ChatPersistenceStatus::kBusy;
       case persistence::EnqueueStatus::kUnavailable:
-        QAI_LOG(warn, "http") << "chat_persistence_enqueue user_id=" << user_id << " first_sequence=" << first_sequence
+        QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "chat_events_enqueue_failed user_id=" << user_id << " first_sequence=" << first_sequence
                  << " status=unavailable";
         return chat::ChatPersistenceStatus::kUnavailable;
     }
@@ -137,13 +137,13 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
   };
   const chat::ChatModelConfig chat_config = chat::chatModelConfigFromEnvironment();
   const char* provider_name = chat_config.provider_kind == chat::ChatProviderKind::kMock ? "mock" : "openai-compatible";
-  QAI_LOG(info, "http") << "chat_provider_configured provider=" << provider_name << " model=" << chat_config.model;
+  QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_provider_configured provider=" << provider_name;
   std::unique_ptr<chat::ChatModelProvider> chat_provider = chat::makeChatModelProvider(chat_config);
   chat_service_ = std::make_unique<chat::ChatService>(std::move(chat_provider), std::move(chat_executor), 64, 20,
                                                       32768, std::move(persistence_sink));
   chat_progress_ = std::make_unique<chat::ChatProgressStore>(util::currentTimeMilliseconds, std::chrono::minutes{5});
   const web_search::BaiduSearchConfig web_search_config = web_search::baiduSearchConfigFromEnvironment();
-  QAI_LOG(info, "http") << "web_search_configured enabled=" << web_search_config.enabled
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_configured enabled=" << web_search_config.enabled
                          << " provider=baidu timeout_ms=" << web_search_config.timeout.count()
                          << " top_k=" << web_search_config.top_k;
   web_search_provider_ = std::make_unique<web_search::BaiduSearchProvider>(web_search_config);
@@ -164,11 +164,11 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
   web_search_coordinator_ = std::make_unique<web_search::WebSearchCoordinator>(
       std::move(planning_model), *web_evidence_service_, *web_search_consents_);
   const knowledge::RerankConfig rerank_config = knowledge::rerankConfigFromEnvironment();
-  QAI_LOG(info, "http") << "rerank_configured enabled=" << rerank_config.enabled << " endpoint=" << rerank_config.endpoint
+  QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "rerank_configured enabled=" << rerank_config.enabled
            << " timeout_ms=" << rerank_config.timeout.count();
   rerank_client_ = std::make_unique<knowledge::RerankClient>(rerank_config);
   const knowledge::TokenConfig token_config = knowledge::tokenConfigFromEnvironment();
-  QAI_LOG(info, "http") << "tokenizer_configured enabled=" << token_config.enabled << " base_url=" << token_config.base_url
+  QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "tokenizer_configured enabled=" << token_config.enabled
            << " timeout_ms=" << token_config.timeout.count();
   token_client_ = std::make_unique<knowledge::TokenClient>(token_config);
 
@@ -199,12 +199,12 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
       knowledge::DocumentRepository repository(connection);
       const std::optional<knowledge::Document> document = repository.findOwned(user_id, document_id);
       if (!document.has_value()) {
-        QAI_LOG(warn, "http") << "document_processing user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(warn, qaiservice::log::Module::kKnowledge) << "document_processing user_id=" << user_id << " document_id=" << document_id
                  << " status=not_found";
         return;
       }
       try {
-        QAI_LOG(info, "http") << "document_processing user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_processing user_id=" << user_id << " document_id=" << document_id
                  << " status=processing";
         repository.updateStatus(user_id, document_id, knowledge::DocumentStatus::kProcessing, "");
         knowledge::DocumentExtractor extractor;
@@ -227,15 +227,15 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
         }
         repository.replaceChunks(user_id, document_id, chunks);
         repository.updateStatus(user_id, document_id, knowledge::DocumentStatus::kReady, "");
-        QAI_LOG(info, "http") << "document_processing user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_processing user_id=" << user_id << " document_id=" << document_id
                  << " status=ready chunks=" << chunks.size() << " tokenizer=" << (tokenized ? "success" : "degraded");
       } catch (const knowledge::DocumentExtractionError&) {
         repository.updateStatus(user_id, document_id, knowledge::DocumentStatus::kFailed, "extraction_failed");
-        QAI_LOG(warn, "http") << "document_processing user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(warn, qaiservice::log::Module::kKnowledge) << "document_processing user_id=" << user_id << " document_id=" << document_id
                  << " status=failed reason=extraction_failed";
       } catch (const std::exception& error) {
         repository.updateStatus(user_id, document_id, knowledge::DocumentStatus::kFailed, "processing_failed");
-        QAI_LOG(err, "http") << "document_processing user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_processing user_id=" << user_id << " document_id=" << document_id
                   << " status=failed reason=processing_failed error=" << error.what();
       }
     };
@@ -251,7 +251,15 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
                                      std::move(assistant_executor));
   MiddlewareChain middleware;
   middleware.add(makeAccessLogMiddleware([](AccessLogEntry entry) {
-    QAI_LOG(info, "http") << "http_request request_id=" << entry.request_id << " method=" << entry.method
+    if (entry.path == "/health") {
+      QAI_LOG(debug, qaiservice::log::Module::kHttp) << "http_request request_id=" << entry.request_id
+                                                     << " method=" << entry.method
+                                                     << " path=" << entry.path
+                                                     << " status=" << entry.status_code
+                                                     << " elapsed_ms=" << entry.elapsed_milliseconds;
+      return;
+    }
+    QAI_LOG(info, qaiservice::log::Module::kHttp) << "http_request request_id=" << entry.request_id << " method=" << entry.method
              << " path=" << entry.path << " status=" << entry.status_code
              << " elapsed_ms=" << entry.elapsed_milliseconds;
   }));
@@ -280,18 +288,21 @@ QAIHttpServer::QAIHttpServer(muduo::net::EventLoop* loop, const muduo::net::Inet
 
 QAIHttpServer::~QAIHttpServer()
 {
+  QAI_LOG(info, qaiservice::log::Module::kMain) << "service_stopping";
   // 先让已排队的 EventLoop 任务失效，再等待 Worker 停止产生新任务。
   lifetime_token_.reset();
   worker_pool_.stop();
   chat_event_publisher_->stop();
   chat_event_consumer_->stop();
   database_worker_.stop();
+  QAI_LOG(info, qaiservice::log::Module::kMain) << "service_stopped";
 }
 
 // 服务控制
 void QAIHttpServer::start()
 {
   server_.start();
+  QAI_LOG(info, qaiservice::log::Module::kMain) << "service_listening port=8080";
 }
 
 // 会话恢复
@@ -309,7 +320,7 @@ void QAIHttpServer::loadPersistedSessions()
         const auto expires_at = users::SessionStore::Clock::time_point{std::chrono::milliseconds{session.expires_at_ms}};
         sessions_.loadPersisted(session.token_hash, session.user_id, expires_at);
       }
-      QAI_LOG(info, "http") << "session_restore loaded=" << persisted.size() << " purged_expired=" << purged;
+      QAI_LOG(info, qaiservice::log::Module::kUsers) << "sessions_restored loaded=" << persisted.size() << " purged_expired=" << purged;
       loaded.set_value();
     } catch (...) {
       loaded.set_exception(std::current_exception());

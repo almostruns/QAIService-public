@@ -219,6 +219,9 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
         }
         if (!result.created) {
           storage.remove(user_id, stored.storage_key);
+          QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_upload_deduplicated user_id=" << user_id
+                                                              << " document_id=" << result.document->id
+                                                              << " size_bytes=" << stored.size_bytes;
           writer.send(http::jsonResponse(200, {{"duplicate", true}, {"document", documentJson(result.document.value())}}));
           return;
         }
@@ -227,9 +230,12 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
           writer.send(http::jsonResponse(503, {{"error", "document_submission_unavailable"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_upload_queued user_id=" << user_id
+                                                            << " document_id=" << result.document->id
+                                                            << " size_bytes=" << stored.size_bytes;
         writer.send(http::jsonResponse(202, {{"duplicate", false}, {"document", documentJson(result.document.value())}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "document_upload user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_upload user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(500, {{"error", "document_upload_failed"}}));
       }
     };
@@ -251,9 +257,11 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
         for (const Document& document : repository.listOwned(user_id)) {
           documents.push_back(documentJson(document));
         }
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "documents_listed user_id=" << user_id
+                                                            << " count=" << documents.size();
         writer.send(http::jsonResponse(200, {{"documents", std::move(documents)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "document_list user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_list user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       }
     };
@@ -283,9 +291,11 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
           writer.send(http::jsonResponse(404, {{"error", "document_not_found"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_loaded user_id=" << user_id
+                                                            << " document_id=" << document_id;
         writer.send(http::jsonResponse(200, {{"document", documentJson(document.value())}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "document_get user_id=" << user_id << " document_id=" << document_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_get user_id=" << user_id << " document_id=" << document_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       }
     };
@@ -318,9 +328,11 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
           writer.send(http::jsonResponse(503, {{"error", "document_submission_unavailable"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_reindex_queued user_id=" << user_id
+                                                            << " document_id=" << document_id;
         writer.send(http::jsonResponse(202, {{"status", "queued"}, {"document_id", document_id}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "document_reindex user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_reindex user_id=" << user_id << " document_id=" << document_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       }
@@ -360,9 +372,12 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
         http::Response response{200, document->media_type, content};
         response.headers["Cache-Control"] = "no-store";
         response.headers["Content-Disposition"] = "inline; filename=\"" + document->original_name + "\"";
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "document_content_served user_id=" << user_id
+                                                            << " document_id=" << document_id
+                                                            << " size_bytes=" << content.size();
         writer.send(std::move(response));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "document_content user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "document_content user_id=" << user_id << " document_id=" << document_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       }
@@ -403,7 +418,7 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
         const std::vector<SearchCandidate> candidates = repository.listSearchCandidatesOwned(user_id);
         Retriever retriever;
         const std::vector<Evidence> evidence = retriever.search(query, candidates, 5);
-        QAI_LOG(info, "knowledge") << "knowledge_search user_id=" << user_id << " candidates=" << candidates.size()
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "knowledge_search user_id=" << user_id << " candidates=" << candidates.size()
                  << " evidence=" << evidence.size();
         KnowledgeAnswerService answer_service;
         nlohmann::json sources = nlohmann::json::array();
@@ -422,7 +437,7 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
                                        {"answer", answer_service.answer(evidence)},
                                        {"evidence", std::move(sources)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "knowledge_search user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "knowledge_search user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "knowledge_unavailable"}}));
       }
     };
@@ -463,9 +478,12 @@ void registerKnowledgeRoutes(http::Router& router, db::DatabaseWorker& database_
           writer.send(http::jsonResponse(404, {{"error", "knowledge_item_not_found"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kKnowledge) << "knowledge_status_updated user_id=" << user_id
+                                                            << " document_id=" << document_id
+                                                            << " status=" << learningStatusName(status);
         writer.send(http::jsonResponse(200, {{"id", document_id}, {"status", learningStatusName(status)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "knowledge") << "knowledge_status user_id=" << user_id << " document_id=" << document_id
+        QAI_LOG(err, qaiservice::log::Module::kKnowledge) << "knowledge_status user_id=" << user_id << " document_id=" << document_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "database_unavailable"}}));
       }

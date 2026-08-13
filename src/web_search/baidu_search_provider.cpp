@@ -1,5 +1,7 @@
 #include "web_search/baidu_search_provider.h"
 
+#include "logging/log.h"
+
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
@@ -305,9 +307,12 @@ BaiduSearchProvider::BaiduSearchProvider(BaiduSearchConfig config, std::shared_p
 SearchResponse BaiduSearchProvider::search(const SearchRequest& request)
 {
   if (!config_.enabled || config_.api_key.empty() || request.query.empty() || transport_ == nullptr) {
+    QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "search_provider_unavailable provider=baidu";
     return {SearchStatus::kNotConfigured};
   }
 
+  const auto started_at = std::chrono::steady_clock::now();
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "search_provider_started provider=baidu";
   SearchHttpRequest http_request = makeRequest(config_, request);
   const bool bounded = request.maximum_duration.count() > 0;
   const auto deadline = std::chrono::steady_clock::now() + request.maximum_duration;
@@ -332,7 +337,14 @@ SearchResponse BaiduSearchProvider::search(const SearchRequest& request)
     }
     response = transport_->perform(http_request);
   }
-  return parseResponse(response);
+  const SearchResponse parsed = parseResponse(response);
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - started_at);
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "search_provider_finished provider=baidu"
+                                                      << " status=" << static_cast<int>(parsed.status)
+                                                      << " result_count=" << parsed.results.size()
+                                                      << " elapsed_ms=" << elapsed.count();
+  return parsed;
 }
 
 }  // namespace qaiservice::web_search

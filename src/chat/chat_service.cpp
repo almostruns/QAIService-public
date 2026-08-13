@@ -121,13 +121,20 @@ ChatSubmitStatus ChatService::submit(std::uint64_t user_id, ConversationMode mod
                                      CompletionTransformer completion_transformer)
 {
   if (prompt.empty()) {
+    QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_submit_rejected user_id=" << user_id
+                                                   << " conversation_id=" << conversation_id
+                                                   << " reason=empty_prompt";
     return ChatSubmitStatus::kInvalidPrompt;
   }
 
   bool should_schedule = false;
+  std::size_t pending_requests = 0;
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
     if (state_->pending_requests >= state_->max_pending_requests) {
+      QAI_LOG(warn, qaiservice::log::Module::kChat) << "chat_submit_rejected user_id=" << user_id
+                                                     << " conversation_id=" << conversation_id
+                                                     << " reason=queue_full";
       return ChatSubmitStatus::kBusy;
     }
 
@@ -137,17 +144,22 @@ ChatSubmitStatus ChatService::submit(std::uint64_t user_id, ConversationMode mod
         {std::move(prompt), std::move(system_context), std::move(callback), std::move(progress_callback),
          std::move(completion_transformer)});
     ++state_->pending_requests;
+    pending_requests = state_->pending_requests;
     if (!conversation.worker_scheduled) {
       conversation.worker_scheduled = true;
       should_schedule = true;
     }
   }
+  QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_request_queued user_id=" << user_id
+                                                 << " mode=" << static_cast<int>(mode)
+                                                 << " conversation_id=" << conversation_id
+                                                 << " pending=" << pending_requests;
 
   if (should_schedule) {
     try {
       schedule(user_id, mode, conversation_id);
     } catch (const std::exception& error) {
-      QAI_LOG(warn, "chat") << "chat_schedule_exception user_id=" << user_id << " error=" << error.what();
+      QAI_LOG(warn, qaiservice::log::Module::kChat) << "chat_schedule_exception user_id=" << user_id << " error=" << error.what();
       std::lock_guard<std::mutex> lock(state_->mutex);
       const ConversationKey key{user_id, mode, conversation_id};
       UserConversation& conversation = state_->conversations[key];
@@ -242,6 +254,10 @@ void ChatService::schedule(std::uint64_t user_id, ConversationMode mode, std::ui
 
 void ChatService::processOne(std::uint64_t user_id, ConversationMode mode, std::uint64_t conversation_id)
 {
+  const auto started_at = std::chrono::steady_clock::now();
+  QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_model_started user_id=" << user_id
+                                                 << " mode=" << static_cast<int>(mode)
+                                                 << " conversation_id=" << conversation_id;
   PendingRequest request;
   std::vector<ChatMessage> messages;
   {
@@ -267,10 +283,17 @@ void ChatService::processOne(std::uint64_t user_id, ConversationMode mode, std::
       completion = request.completion_transformer(std::move(completion));
     }
   } catch (const std::exception& error) {
-    QAI_LOG(warn, "chat") << "chat_provider_exception user_id=" << user_id << " mode=" << static_cast<int>(mode)
+    QAI_LOG(warn, qaiservice::log::Module::kChat) << "chat_provider_exception user_id=" << user_id << " mode=" << static_cast<int>(mode)
              << " conversation_id=" << conversation_id << " error=" << error.what();
     completion = {ChatCompletionStatus::kUnavailable};
   }
+  const auto model_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - started_at);
+  QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_model_finished user_id=" << user_id
+                                                 << " mode=" << static_cast<int>(mode)
+                                                 << " conversation_id=" << conversation_id
+                                                 << " status=" << static_cast<int>(completion.status)
+                                                 << " elapsed_ms=" << model_elapsed.count();
 
   bool schedule_next = false;
   std::optional<CompletedChatTurn> completed_turn;
@@ -298,14 +321,24 @@ void ChatService::processOne(std::uint64_t user_id, ConversationMode mode, std::
     }
   }
 
+  if (completed_turn.has_value()) {
+    QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_history_updated user_id=" << user_id
+                                                   << " mode=" << static_cast<int>(mode)
+                                                   << " conversation_id=" << conversation_id
+                                                   << " first_sequence=" << completed_turn->first_sequence;
+  }
+
   if (completed_turn.has_value() && state_->persistence_sink) {
     try {
       if (request.progress_callback) {
         request.progress_callback(ChatExecutionStage::kPersistence);
       }
       completion.persistence = state_->persistence_sink(std::move(completed_turn.value()));
+      QAI_LOG(info, qaiservice::log::Module::kChat) << "chat_persistence_requested user_id=" << user_id
+                                                     << " conversation_id=" << conversation_id
+                                                     << " status=" << static_cast<int>(completion.persistence);
     } catch (const std::exception& error) {
-      QAI_LOG(warn, "chat") << "chat_persistence_sink_exception user_id=" << user_id << " error=" << error.what();
+      QAI_LOG(warn, qaiservice::log::Module::kChat) << "chat_persistence_sink_exception user_id=" << user_id << " error=" << error.what();
       completion.persistence = ChatPersistenceStatus::kUnavailable;
     }
   }
@@ -313,7 +346,7 @@ void ChatService::processOne(std::uint64_t user_id, ConversationMode mode, std::
   try {
     request.callback(std::move(completion));
   } catch (const std::exception& error) {
-    QAI_LOG(warn, "chat") << "chat_callback_exception user_id=" << user_id << " error=" << error.what();
+    QAI_LOG(warn, qaiservice::log::Module::kChat) << "chat_callback_exception user_id=" << user_id << " error=" << error.what();
     // 响应发送失败只影响当前请求，不能破坏同一用户队列的推进。
   }
   if (schedule_next) {

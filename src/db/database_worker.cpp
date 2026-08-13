@@ -64,6 +64,7 @@ void DatabaseWorker::stop()
 
   if (thread_.joinable()) {
     thread_.join();
+    QAI_LOG(info, qaiservice::log::Module::kDb) << "database_worker_stopped";
   }
 }
 
@@ -72,6 +73,9 @@ bool DatabaseWorker::submit(Task task)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stopping_ || tasks_.size() >= max_pending_tasks_) {
+      QAI_LOG(warn, qaiservice::log::Module::kDb) << "database_task_rejected stopping=" << stopping_
+                                                   << " pending=" << tasks_.size()
+                                                   << " capacity=" << max_pending_tasks_;
       return false;
     }
     tasks_.push_back(std::move(task));
@@ -89,6 +93,7 @@ void DatabaseWorker::run(DatabaseConfig config)
       std::lock_guard<std::mutex> lock(mutex_);
       ready_ = true;
     }
+    QAI_LOG(info, qaiservice::log::Module::kDb) << "database_worker_ready capacity=" << max_pending_tasks_;
     condition_.notify_one();
 
     while (true) {
@@ -111,10 +116,16 @@ void DatabaseWorker::run(DatabaseConfig config)
         task(connection);
       } catch (const std::exception& error) {
         // 任务负责把错误交给自己的调用方；异常不能终止数据库线程。
-        QAI_LOG(err, "db") << "database_task_exception error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kDb) << "database_task_exception error=" << error.what();
       }
     }
+  } catch (const std::exception& error) {
+    QAI_LOG(err, qaiservice::log::Module::kDb) << "database_worker_start_failed error=" << error.what();
+    std::lock_guard<std::mutex> lock(mutex_);
+    startup_error_ = std::current_exception();
+    condition_.notify_one();
   } catch (...) {
+    QAI_LOG(err, qaiservice::log::Module::kDb) << "database_worker_start_failed error=unknown";
     std::lock_guard<std::mutex> lock(mutex_);
     startup_error_ = std::current_exception();
     condition_.notify_one();

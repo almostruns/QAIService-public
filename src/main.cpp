@@ -13,7 +13,7 @@ int main()
 {
   const std::filesystem::path log_path = qaiservice::log::logPathFromEnvironment();
   qaiservice::log::initialize(log_path);
-  QAI_LOG(info, "main") << "service_start log_path=" << log_path.string();
+  QAI_LOG(info, qaiservice::log::Module::kMain) << "service_start log_path=" << log_path.string();
 
   // 服务配置
   constexpr unsigned short kPort = 8080;

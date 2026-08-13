@@ -4,6 +4,8 @@
 #include "persistence/chat_message_repository.h"
 #include "persistence/rabbitmq_connection.h"
 
+#include "logging/log.h"
+
 #include <mysql.h>
 
 #include <chrono>
@@ -83,6 +85,7 @@ void ChatEventConsumer::run()
         RabbitMqConnection rabbit(state_->rabbit_config, RabbitConnectionMode::kConsumer);
         db::MySqlConnection database(state_->database_config);
         ChatMessageRepository repository(database);
+        QAI_LOG(info, qaiservice::log::Module::kPersistence) << "consumer_connected";
 
         while (!state_->stopping.load()) {
           const std::optional<RabbitDelivery> delivery = rabbit.get();
@@ -94,13 +97,20 @@ void ChatEventConsumer::run()
           const std::optional<ChatMessageCreated> event = chatMessageEventFromJson(delivery->body);
           if (!event.has_value()) {
             rabbit.reject(delivery->delivery_tag, false);
+            QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "consumer_event_rejected reason=invalid_payload";
             std::lock_guard<std::mutex> lock(state_->mutex);
             ++state_->snapshot.rejected;
             continue;
           }
 
           const bool inserted = repository.insertIdempotent(event.value());
+          QAI_LOG(info, qaiservice::log::Module::kPersistence) << "consumer_mysql_committed event_id=" << event->event_id
+                                                                << " user_id=" << event->user_id
+                                                                << " conversation_id=" << event->conversation_id
+                                                                << " sequence=" << event->sequence
+                                                                << " inserted=" << inserted;
           rabbit.acknowledge(delivery->delivery_tag);
+          QAI_LOG(info, qaiservice::log::Module::kPersistence) << "consumer_event_acknowledged event_id=" << event->event_id;
           std::lock_guard<std::mutex> lock(state_->mutex);
           if (inserted) {
             ++state_->snapshot.persisted;
@@ -108,7 +118,8 @@ void ChatEventConsumer::run()
             ++state_->snapshot.duplicates;
           }
         }
-      } catch (const std::exception&) {
+      } catch (const std::exception& error) {
+        QAI_LOG(warn, qaiservice::log::Module::kPersistence) << "consumer_connection_failed error=" << error.what();
         {
           std::lock_guard<std::mutex> lock(state_->mutex);
           ++state_->snapshot.connection_failures;
@@ -118,7 +129,8 @@ void ChatEventConsumer::run()
         }
       }
     }
-  } catch (const std::exception&) {
+  } catch (const std::exception& error) {
+    QAI_LOG(err, qaiservice::log::Module::kPersistence) << "consumer_stopped_unexpectedly error=" << error.what();
     std::lock_guard<std::mutex> lock(state_->mutex);
     ++state_->snapshot.connection_failures;
   }

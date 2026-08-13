@@ -129,9 +129,13 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         const std::vector<LifeRecord> focus = repository.listOwned(user_id, "focus");
         const std::vector<LifeRecord> checkins = repository.listOwned(user_id, "checkins");
         nlohmann::json insights = buildActivityInsights(projects, focus, checkins, range.start_ms, range.end_ms);
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "activity_insights_ready user_id=" << user_id
+                                                       << " project_count=" << projects.size()
+                                                       << " focus_count=" << focus.size()
+                                                       << " checkin_count=" << checkins.size();
         writer.send(http::jsonResponse(200, std::move(insights)));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_activity_insights user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_activity_insights user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "activity_insights_unavailable"}}));
       }
     };
@@ -162,11 +166,14 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         const std::vector<LifeRecord> monthly = repository.listOwned(user_id, "monthly_budgets");
         nlohmann::json insights = buildFinancialInsights(
             accounts, ledger, settings, monthly, month, util::currentTimeMilliseconds());
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "financial_insights_ready user_id=" << user_id
+                                                       << " account_count=" << accounts.size()
+                                                       << " ledger_count=" << ledger.size();
         writer.send(http::jsonResponse(200, std::move(insights)));
       } catch (const std::invalid_argument&) {
         writer.send(http::jsonResponse(400, {{"error", "invalid_financial_month"}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "financial_insights user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "financial_insights user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "financial_insights_unavailable"}}));
       }
     };
@@ -194,9 +201,12 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         for (const LifeRecord& record : repository.listOwned(user_id, domain)) {
           records.push_back(recordJson(record));
         }
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "life_records_listed user_id=" << user_id
+                                                       << " domain=" << domain
+                                                       << " count=" << records.size();
         writer.send(http::jsonResponse(200, {{"records", std::move(records)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_domain_list user_id=" << user_id << " domain=" << domain << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_domain_list user_id=" << user_id << " domain=" << domain << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "life_domain_unavailable"}}));
       }
     };
@@ -263,12 +273,18 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         }
         const CreateLifeRecordResult result = repository.create(user_id, domain, payload, occurred_at, dedupe);
         if (!result.created) {
+          QAI_LOG(info, qaiservice::log::Module::kLife) << "life_record_deduplicated user_id=" << user_id
+                                                         << " domain=" << domain
+                                                         << " record_id=" << result.record.id;
           writer.send(http::jsonResponse(200, {{"duplicate", true}, {"record", recordJson(result.record)}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "life_record_created user_id=" << user_id
+                                                       << " domain=" << domain
+                                                       << " record_id=" << result.record.id;
         writer.send(http::jsonResponse(201, {{"duplicate", false}, {"record", recordJson(result.record)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_record_create user_id=" << user_id << " domain=" << domain << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_record_create user_id=" << user_id << " domain=" << domain << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "life_record_unavailable"}}));
       }
     };
@@ -331,9 +347,12 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         LifeRecord updated = existing.value();
         updated.payload = payload;
         updated.occurred_at_ms = occurred_at;
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "life_record_updated user_id=" << user_id
+                                                       << " domain=" << domain
+                                                       << " record_id=" << id;
         writer.send(http::jsonResponse(200, {{"record", recordJson(updated)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_record_update user_id=" << user_id << " domain=" << domain << " id=" << id
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_record_update user_id=" << user_id << " domain=" << domain << " id=" << id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "life_record_unavailable"}}));
       }
@@ -365,9 +384,12 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
           writer.send(http::jsonResponse(404, {{"error", "life_record_not_found"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "life_record_deleted user_id=" << user_id
+                                                       << " domain=" << domain
+                                                       << " record_id=" << id;
         writer.send({204, "application/json", ""});
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_record_delete user_id=" << user_id << " domain=" << domain << " id=" << id
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_record_delete user_id=" << user_id << " domain=" << domain << " id=" << id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "life_record_unavailable"}}));
       }
@@ -402,11 +424,14 @@ void registerLifeRoutes(http::Router& router, db::DatabaseWorker& database_worke
         for (const LifeRecord& record : sleeps) {
           sleep_minutes += record.payload.value("duration_minutes", 0LL);
         }
+        QAI_LOG(info, qaiservice::log::Module::kLife) << "life_summary_ready user_id=" << user_id
+                                                       << " weight_count=" << weights.size()
+                                                       << " sleep_count=" << sleeps.size();
         writer.send(http::jsonResponse(200, {{"ledger", {{"income_minor", income}, {"expense_minor", expense}}},
                                        {"latest_weight_grams", weights.empty() ? 0 : weights.front().payload.value("grams", 0)},
                                        {"average_sleep_minutes", sleeps.empty() ? 0 : sleep_minutes / static_cast<std::int64_t>(sleeps.size())}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "life") << "life_summary user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kLife) << "life_summary user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "life_summary_unavailable"}}));
       }
     };

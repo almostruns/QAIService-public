@@ -1,5 +1,7 @@
 #include "web_search/web_search_coordinator.h"
 
+#include "logging/log.h"
+
 #include <sodium.h>
 
 #include <array>
@@ -63,6 +65,10 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
                                              WebPreparationProgress progress)
 {
   if (!web_search_enabled) {
+    QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_skipped user_id=" << user_id
+                                                        << " mode=" << mode
+                                                        << " conversation_id=" << conversation_id
+                                                        << " reason=request_disabled";
     WebPreparation ready;
     ready.status = WebPreparationStatus::kReady;
     return ready;
@@ -79,6 +85,9 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
     const std::string digest = messageDigest(message);
     const auto consent = consents_.consumeOwned(consent_token.value(), user_id, mode, conversation_id, digest);
     if (!consent.has_value()) {
+      QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_consent_rejected user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id;
       return {WebPreparationStatus::kInvalidConsent};
     }
     WebSearchPlan approved_plan;
@@ -88,18 +97,34 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
     approved_plan.reason = "user_approved_sensitive_query";
     plan = std::move(approved_plan);
     sensitive = true;
+    QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_consent_consumed user_id=" << user_id
+                                                        << " mode=" << mode
+                                                        << " conversation_id=" << conversation_id
+                                                        << " query_count=" << plan->queries.size();
   } else {
     const std::optional<WebSearchPlan> deterministic = router_.deterministicRoute(message);
     if (deterministic.has_value() && !deterministic->needs_web) {
+      QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_skipped user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id
+                                                          << " reason=stable_knowledge";
       WebPreparation ready;
       ready.status = WebPreparationStatus::kReady;
       return ready;
     }
     plan = modelPlan(message, trusted_private_context);
     if (!plan.has_value() && deterministic.has_value() && deterministic->required_for_answer) {
+      QAI_LOG(warn, qaiservice::log::Module::kWebSearch) << "web_search_planning_failed user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id
+                                                          << " required=true";
       return {WebPreparationStatus::kPlannerUnavailable};
     }
     if (!plan.has_value()) {
+      QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_skipped user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id
+                                                          << " reason=planner_degraded";
       WebPreparation ready;
       ready.status = WebPreparationStatus::kReady;
       return ready;
@@ -112,6 +137,10 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
       plan->reason = deterministic->reason;
     }
     if (!plan->needs_web) {
+      QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_skipped user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id
+                                                          << " reason=planner_not_needed";
       WebPreparation ready;
       ready.status = WebPreparationStatus::kReady;
       return ready;
@@ -130,6 +159,11 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
       confirmation.risk_types = risks;
       confirmation.consent_token = consents_.create(user_id, mode, conversation_id, digest,
                                                     plan->required_for_answer, plan->queries, risks);
+      QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_consent_required user_id=" << user_id
+                                                          << " mode=" << mode
+                                                          << " conversation_id=" << conversation_id
+                                                          << " query_count=" << plan->queries.size()
+                                                          << " risk_count=" << risks.size();
       return confirmation;
     }
   }
@@ -147,6 +181,12 @@ WebPreparation WebSearchCoordinator::prepare(std::uint64_t user_id, const std::s
           progress(WebPreparationStage::kEvidence);
         }
       });
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_search_evidence_finished user_id=" << user_id
+                                                      << " mode=" << mode
+                                                      << " conversation_id=" << conversation_id
+                                                      << " status=" << static_cast<int>(bundle.status)
+                                                      << " source_count=" << bundle.sources.size()
+                                                      << " sensitive=" << sensitive;
   if (bundle.status != WebEvidenceStatus::kSuccess && plan->required_for_answer) {
     WebPreparation unavailable;
     unavailable.status = WebPreparationStatus::kRequiredSearchUnavailable;

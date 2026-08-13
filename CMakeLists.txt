@@ -46,7 +46,10 @@ add_library(
 target_compile_features(qaiservice_web_search PUBLIC cxx_std_17)
 target_include_directories(qaiservice_web_search PUBLIC src)
 target_include_directories(qaiservice_web_search PRIVATE ${LIBXML2_INCLUDE_DIR})
-target_link_libraries(qaiservice_web_search PRIVATE CURL::libcurl ${LIBXML2_LIBRARY} ${SODIUM_LIBRARY})
+target_link_libraries(
+  qaiservice_web_search
+  PRIVATE CURL::libcurl ${LIBXML2_LIBRARY} ${SODIUM_LIBRARY} qaiservice_logging
+)
 
 add_executable(qaiservice src/main.cpp)
 target_compile_features(qaiservice PRIVATE cxx_std_17)
@@ -83,7 +86,7 @@ target_include_directories(
 target_link_libraries(
   qaiservice_persistence
   PUBLIC qaiservice_chat qaiservice_db
-  PRIVATE ${MARIADB_LIBRARY} ${RABBITMQ_LIBRARY} ${SODIUM_LIBRARY}
+  PRIVATE ${MARIADB_LIBRARY} ${RABBITMQ_LIBRARY} ${SODIUM_LIBRARY} qaiservice_logging
 )
 
 add_library(

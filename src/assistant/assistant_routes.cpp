@@ -307,7 +307,7 @@ void submitPrivateChat(std::uint64_t user_id, std::uint64_t conversation_id, std
   try {
     rerank = rerank_client.rerank(prompt, candidates);
   } catch (const std::exception& error) {
-    QAI_LOG(err, "assistant") << "private_assistant_rerank user_id=" << user_id << " error=" << error.what();
+    QAI_LOG(err, qaiservice::log::Module::kAssistant) << "private_assistant_rerank user_id=" << user_id << " error=" << error.what();
   }
   std::vector<knowledge::Evidence> evidence;
   if (rerank.status == knowledge::RerankStatus::kSuccess) {
@@ -334,7 +334,7 @@ void submitPrivateChat(std::uint64_t user_id, std::uint64_t conversation_id, std
   }
 
   const PrivateContext context = buildPrivateContext(evidence, records);
-  QAI_LOG(info, "assistant") << "private_assistant_context user_id=" << user_id << " candidates=" << candidates.size()
+  QAI_LOG(info, qaiservice::log::Module::kAssistant) << "private_assistant_context user_id=" << user_id << " candidates=" << candidates.size()
            << " evidence=" << context.evidence.size() << " life_records=" << records.size()
            << " rerank_status=" << rerankStatusName(rerank.status)
            << " tokenizer_status=" << tokenStatusName(token_fit.status)
@@ -386,6 +386,8 @@ void submitPrivateChat(std::uint64_t user_id, std::uint64_t conversation_id, std
                         {"web_sources", webSourcesJson(web_sources)}};
     if (parsed->kind == PrivateCompletionKind::kProposal) {
       const std::string token = proposals.create(user_id, parsed->command.value());
+      QAI_LOG(info, qaiservice::log::Module::kAssistant) << "assistant_proposal_created user_id=" << user_id
+                                                          << " domain=" << parsed->command->domain;
       body["requires_confirmation"] = true;
       body["proposal_token"] = token;
       body["preview"] = {{"summary", parsed->command->summary},
@@ -396,6 +398,10 @@ void submitPrivateChat(std::uint64_t user_id, std::uint64_t conversation_id, std
       const bool completed = progress_store.complete(user_id, request_id.value());
       (void)completed;
     }
+    QAI_LOG(info, qaiservice::log::Module::kAssistant) << "private_assistant_completed user_id=" << user_id
+                                                        << " evidence_count=" << evidence.size()
+                                                        << " web_source_count=" << web_sources.size()
+                                                        << " persistence=" << static_cast<int>(completion.persistence);
     writer.send(http::jsonResponse(200, body));
   },
       [user_id, request_id, &progress_store](chat::ChatExecutionStage stage) {
@@ -524,6 +530,8 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
             break;
           }
         }
+        const std::size_t candidate_count = candidates.size();
+        const std::size_t life_record_count = records.size();
         AssistantTask rerank_task = [user_id, conversation_id = request.conversation_id,
                                      prompt = request.message, candidates = std::move(candidates),
                                      records = std::move(records), request_id = request.request_id, writer,
@@ -537,15 +545,19 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
                               web_search, request_id, web_search_enabled, web_search_consent_token);
           } catch (const std::exception& error) {
             failProgress(progress_store, user_id, request_id);
-            QAI_LOG(err, "assistant") << "private_assistant_submit user_id=" << user_id << " conversation_id=" << conversation_id
+            QAI_LOG(err, qaiservice::log::Module::kAssistant) << "private_assistant_submit user_id=" << user_id << " conversation_id=" << conversation_id
                       << " error=" << error.what();
             writer.send(http::jsonResponse(503, {{"error", "private_context_unavailable"}}));
           }
         };
+        QAI_LOG(info, qaiservice::log::Module::kAssistant) << "private_context_loaded user_id=" << user_id
+                                                            << " conversation_id=" << request.conversation_id
+                                                            << " candidate_count=" << candidate_count
+                                                            << " life_record_count=" << life_record_count;
         assistant_executor(std::move(rerank_task));
       } catch (const std::exception& error) {
         failProgress(progress_store, user_id, request.request_id);
-        QAI_LOG(err, "assistant") << "private_assistant_prepare user_id=" << user_id << " conversation_id="
+        QAI_LOG(err, qaiservice::log::Module::kAssistant) << "private_assistant_prepare user_id=" << user_id << " conversation_id="
                   << request.conversation_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "private_context_unavailable"}}));
       }
@@ -618,6 +630,8 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
           }
           command.payload = validation.normalized;
           const std::string token = proposals.create(user_id, command);
+          QAI_LOG(info, qaiservice::log::Module::kAssistant) << "assistant_proposal_created user_id=" << user_id
+                                                              << " domain=" << command.domain;
           writer.send(http::jsonResponse(200, {{"mode", "mock"},
                                          {"requires_confirmation", true},
                                          {"proposal_token", token},
@@ -625,7 +639,7 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
                                                       {"domain", command.domain},
                                                       {"data", command.payload}}}}));
         } catch (const std::exception& error) {
-          QAI_LOG(err, "assistant") << "assistant_interpret user_id=" << user_id << " error=" << error.what();
+          QAI_LOG(err, qaiservice::log::Module::kAssistant) << "assistant_interpret user_id=" << user_id << " error=" << error.what();
           writer.send(http::jsonResponse(503, {{"error", "assistant_interpret_unavailable"}}));
         }
       };
@@ -642,6 +656,8 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
     }
     intent.command->payload = validation.normalized;
     const std::string token = proposals.create(user_id.value(), intent.command.value());
+    QAI_LOG(info, qaiservice::log::Module::kAssistant) << "assistant_proposal_created user_id=" << user_id.value()
+                                                        << " domain=" << intent.command->domain;
     writer.send(http::jsonResponse(200, {{"mode", "mock"},
                                    {"requires_confirmation", true},
                                    {"proposal_token", token},
@@ -667,6 +683,8 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
     }
     const std::optional<ToolCommand> command = proposals.consume(user_id.value(), token);
     if (!command.has_value()) {
+      QAI_LOG(info, qaiservice::log::Module::kAssistant) << "assistant_confirmation_rejected user_id=" << user_id.value()
+                                                          << " reason=invalid_or_expired";
       writer.send(http::jsonResponse(409, {{"error", "proposal_invalid_or_expired"}}));
       return;
     }
@@ -687,10 +705,14 @@ void registerAssistantRoutes(http::Router& router, db::DatabaseWorker& database_
         const life::CreateLifeRecordResult result = repository.create(
             user_id, command.domain, command.payload,
             life::lifeRecordOccurredAt(command.domain, command.payload, util::currentTimeMilliseconds()), dedupe_key);
+        QAI_LOG(info, qaiservice::log::Module::kAssistant) << "assistant_write_confirmed user_id=" << user_id
+                                                            << " domain=" << result.record.domain
+                                                            << " record_id=" << result.record.id
+                                                            << " created=" << result.created;
         writer.send(http::jsonResponse(201, {{"confirmed", true}, {"record_id", result.record.id},
                                        {"domain", result.record.domain}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "assistant") << "assistant_confirm user_id=" << user_id << " domain=" << command.domain
+        QAI_LOG(err, qaiservice::log::Module::kAssistant) << "assistant_confirm user_id=" << user_id << " domain=" << command.domain
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "assistant_write_failed"}}));
       }

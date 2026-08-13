@@ -403,9 +403,12 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
       try {
         persistence::ChatConversationRepository repository(connection);
         const persistence::ChatConversation conversation = repository.create(user_id, mode, util::currentTimeMilliseconds());
+        QAI_LOG(info, qaiservice::log::Module::kChat) << "conversation_created user_id=" << user_id
+                                                       << " conversation_id=" << conversation.id
+                                                       << " mode=" << static_cast<int>(mode);
         writer.send(http::jsonResponse(201, {{"conversation", conversationJson(conversation)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "chat") << "conversation_create user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kChat) << "conversation_create user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "conversation_create_failed"}}));
       }
     };
@@ -434,9 +437,12 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
         for (const persistence::ChatConversation& conversation : repository.listOwned(user_id, mode)) {
           conversations.push_back(conversationJson(conversation));
         }
+        QAI_LOG(info, qaiservice::log::Module::kChat) << "conversations_listed user_id=" << user_id
+                                                       << " mode=" << static_cast<int>(mode)
+                                                       << " count=" << conversations.size();
         writer.send(http::jsonResponse(200, {{"conversations", std::move(conversations)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "chat") << "conversation_list user_id=" << user_id << " error=" << error.what();
+        QAI_LOG(err, qaiservice::log::Module::kChat) << "conversation_list user_id=" << user_id << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "conversation_list_failed"}}));
       }
     };
@@ -480,10 +486,13 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
           }
           history.push_back(std::move(entry));
         }
+        QAI_LOG(info, qaiservice::log::Module::kChat) << "conversation_history_loaded user_id=" << user_id
+                                                       << " conversation_id=" << conversation_id
+                                                       << " message_count=" << history.size();
         writer.send(http::jsonResponse(200, {{"conversation", conversationJson(conversation.value())},
                                        {"messages", std::move(history)}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "chat") << "conversation_history user_id=" << user_id << " conversation_id=" << conversation_id
+        QAI_LOG(err, qaiservice::log::Module::kChat) << "conversation_history user_id=" << user_id << " conversation_id=" << conversation_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "conversation_history_failed"}}));
       }
@@ -531,9 +540,11 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
           writer.send(http::jsonResponse(404, {{"error", "conversation_not_found"}}));
           return;
         }
+        QAI_LOG(info, qaiservice::log::Module::kChat) << "conversation_deleted user_id=" << user_id
+                                                       << " conversation_id=" << conversation_id;
         writer.send(http::jsonResponse(200, {{"deleted", true}}));
       } catch (const std::exception& error) {
-        QAI_LOG(err, "chat") << "conversation_delete user_id=" << user_id << " conversation_id=" << conversation_id
+        QAI_LOG(err, qaiservice::log::Module::kChat) << "conversation_delete user_id=" << user_id << " conversation_id=" << conversation_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "conversation_delete_failed"}}));
       }
@@ -660,7 +671,7 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
             }
           } catch (const std::exception& error) {
             failProgress(progress_store, user_id, request.request_id);
-            QAI_LOG(err, "chat") << "web_search_prepare user_id=" << user_id
+            QAI_LOG(err, qaiservice::log::Module::kWebSearch) << "web_search_prepare_failed user_id=" << user_id
                                   << " conversation_id=" << request.conversation_id << " error=" << error.what();
             writer.send(http::jsonResponse(503, {{"error", "web_search_prepare_failed"}}));
           }
@@ -668,7 +679,7 @@ void registerChatConversationRoutes(http::Router& router, db::DatabaseWorker& da
         executor(std::move(prepare_task));
       } catch (const std::exception& error) {
         failProgress(progress_store, user_id, request.request_id);
-        QAI_LOG(err, "chat") << "conversation_submit user_id=" << user_id << " conversation_id=" << request.conversation_id
+        QAI_LOG(err, qaiservice::log::Module::kChat) << "conversation_submit user_id=" << user_id << " conversation_id=" << request.conversation_id
                   << " error=" << error.what();
         writer.send(http::jsonResponse(503, {{"error", "conversation_prepare_failed"}}));
       }

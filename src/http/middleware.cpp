@@ -54,7 +54,7 @@ Middleware makeErrorMiddleware()
     try {
       next(std::move(request), writer);
     } catch (const std::exception& error) {
-      QAI_LOG(err, "http") << "http_handler_exception path=" << request.path << " error=" << error.what();
+      QAI_LOG(err, qaiservice::log::Module::kHttp) << "http_handler_exception path=" << request.path << " error=" << error.what();
       writer.send(Response{500, "application/json", R"({"error":"internal_server_error"})"});
     }
   };

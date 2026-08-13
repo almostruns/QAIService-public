@@ -1,5 +1,6 @@
 #include "web_search/web_evidence_service.h"
 
+#include "logging/log.h"
 #include "util/utf8.h"
 
 #include <algorithm>
@@ -70,8 +71,13 @@ WebEvidenceBundle WebEvidenceService::collect(const WebSearchPlan& plan, bool se
   WebEvidenceBundle bundle;
   bundle.required_for_answer = plan.required_for_answer;
   if (!plan.needs_web || plan.queries.empty()) {
+    QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_evidence_skipped reason=no_queries";
     return bundle;
   }
+
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_evidence_started query_count=" << plan.queries.size()
+                                                      << " sensitive=" << sensitive_query
+                                                      << " required=" << plan.required_for_answer;
 
   std::vector<SearchResult> candidates;
   std::optional<WebEvidenceStatus> failure;
@@ -180,6 +186,11 @@ WebEvidenceBundle WebEvidenceService::collect(const WebSearchPlan& plan, bool se
   } else if (failure.has_value()) {
     bundle.status = failure.value();
   }
+  QAI_LOG(info, qaiservice::log::Module::kWebSearch) << "web_evidence_completed status="
+                                                      << static_cast<int>(bundle.status)
+                                                      << " candidate_count=" << candidates.size()
+                                                      << " selected_count=" << selected.size()
+                                                      << " evidence_count=" << bundle.evidence.size();
   return bundle;
 }
 
